@@ -1,0 +1,169 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>QueueVision</title>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@3.19.0/dist/tabler-icons.min.css" />
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: 'Segoe UI', sans-serif; background: #0f1117; color: #e8e8e8; min-height: 100vh; padding: 2rem; }
+    header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 2rem; padding-bottom: 1.25rem; border-bottom: 1px solid #2a2a35; }
+    .logo { display: flex; align-items: center; gap: 12px; }
+    .logo-icon { width: 42px; height: 42px; background: #1a6ef5; border-radius: 10px; display: flex; align-items: center; justify-content: center; font-size: 22px; color: #fff; }
+    .logo-text h1 { font-size: 22px; font-weight: 600; color: #fff; }
+    .logo-text p { font-size: 13px; color: #888; margin-top: 2px; }
+    .header-right { display: flex; align-items: center; gap: 16px; }
+    #clock { font-size: 14px; color: #888; font-variant-numeric: tabular-nums; }
+    .live-badge { display: flex; align-items: center; gap: 6px; background: #0d2b0d; border: 1px solid #1a4a1a; color: #4caf50; font-size: 12px; font-weight: 500; padding: 4px 10px; border-radius: 20px; }
+    .live-dot { width: 7px; height: 7px; border-radius: 50%; background: #4caf50; animation: pulse 1.5s ease-in-out infinite; }
+    @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.3; } }
+    .summary-row { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin-bottom: 1.75rem; }
+    .metric { background: #1a1c26; border: 1px solid #2a2a35; border-radius: 12px; padding: 1.1rem 1.25rem; }
+    .metric-label { font-size: 12px; color: #666; margin-bottom: 6px; text-transform: uppercase; letter-spacing: 0.05em; }
+    .metric-val { font-size: 28px; font-weight: 600; color: #fff; }
+    .metric-sub { font-size: 12px; color: #555; margin-top: 4px; }
+    .stall-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 12px; }
+    .stall-card { background: #1a1c26; border: 1px solid #2a2a35; border-radius: 14px; padding: 1.1rem 1.25rem; transition: border-color 0.2s; }
+    .stall-card:hover { border-color: #3a3a55; }
+    .stall-card.closed { background: #141416; border-color: #222; opacity: 0.7; }
+    .stall-name { font-size: 12px; font-weight: 600; color: #666; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 10px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .stall-count { font-size: 32px; font-weight: 700; color: #fff; line-height: 1; }
+    .stall-unit { font-size: 12px; color: #555; margin-top: 4px; }
+    .bar-wrap { height: 4px; background: #252530; border-radius: 2px; margin: 12px 0 10px; }
+    .bar-fill { height: 4px; border-radius: 2px; transition: width 0.6s ease; }
+    .stall-wait { font-size: 13px; color: #666; display: flex; align-items: center; gap: 6px; }
+    .status-dot { width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0; }
+    .closed-badge { display: inline-block; font-size: 11px; font-weight: 600; background: #2a1515; color: #e24b4b; border: 1px solid #3a1f1f; padding: 3px 9px; border-radius: 20px; margin-bottom: 8px; letter-spacing: 0.04em; }
+    .closed-msg { font-size: 13px; color: #444; margin-top: 6px; }
+    .error-bar { background: #2a1515; border: 1px solid #3a1f1f; color: #e24b4b; font-size: 13px; padding: 10px 16px; border-radius: 8px; margin-bottom: 1.5rem; display: none; }
+    footer { margin-top: 2.5rem; text-align: center; font-size: 12px; color: #444; }
+  </style>
+</head>
+<body>
+
+<header>
+  <div class="logo">
+    <div class="logo-icon"><i class="ti ti-layout-grid"></i></div>
+    <div class="logo-text">
+      <h1>QueueVision</h1>
+      <p>Live canteen queue dashboard</p>
+    </div>
+  </div>
+  <div class="header-right">
+    <span id="clock"></span>
+    <div class="live-badge"><div class="live-dot"></div>Live</div>
+  </div>
+</header>
+
+<div class="error-bar" id="error-bar">
+  <i class="ti ti-alert-circle"></i> Camera script not running — showing last known data. Start <code>queue_tracker.py</code> to update.
+</div>
+
+<div class="summary-row">
+  <div class="metric">
+    <div class="metric-label">Total people queuing</div>
+    <div class="metric-val" id="total-people">0</div>
+    <div class="metric-sub">across all open stalls</div>
+  </div>
+  <div class="metric">
+    <div class="metric-label">Stalls open</div>
+    <div class="metric-val" id="open-count">0</div>
+    <div class="metric-sub">of 3 stalls</div>
+  </div>
+  <div class="metric">
+    <div class="metric-label">Shortest wait</div>
+    <div class="metric-val" id="best-stall" style="font-size:18px; margin-top:6px;">—</div>
+    <div class="metric-sub" id="best-wait"></div>
+  </div>
+</div>
+
+<div class="stall-grid" id="stall-grid"></div>
+<footer>QueueVision &mdash; CID Group 1 &mdash; Updated every second</footer>
+
+<script>
+const STALL_DEFS = [
+  { name: "Food Hut" },
+  { name: "Sedap" },
+  { name: "Sweet Hut" },
+];
+
+const SERVE_RATE = 2;
+const COUNTS_FILE = "counts.json";
+
+function waitTime(count) { return Math.round(count * SERVE_RATE); }
+
+function statusColor(count) {
+  if (count === 0) return { dot: "#4caf50", bar: "#4caf50" };
+  if (count <= 5)  return { dot: "#ef9f27", bar: "#ef9f27" };
+  return                 { dot: "#e24b4a", bar: "#e24b4a" };
+}
+
+function buildGrid(countsData) {
+  const grid = document.getElementById("stall-grid");
+  grid.innerHTML = "";
+  let total = 0, openCount = 0, bestWait = Infinity, bestName = "—", bestWaitVal = 0;
+
+  STALL_DEFS.forEach(s => {
+    const raw = countsData[s.name];
+    const closed = raw === "CLOSED" || raw === undefined;
+    const count = closed ? 0 : parseInt(raw) || 0;
+
+    if (!closed) { total += count; openCount++; }
+    const wait = waitTime(count);
+    if (!closed && wait < bestWait) { bestWait = wait; bestName = s.name; bestWaitVal = wait; }
+
+    const col = statusColor(count);
+    const pct = Math.min(100, Math.round((count / 15) * 100));
+
+    const card = document.createElement("div");
+    card.className = "stall-card" + (closed ? " closed" : "");
+
+    if (closed) {
+      card.innerHTML = `
+        <div class="stall-name">${s.name}</div>
+        <span class="closed-badge">CLOSED</span>
+        <p class="closed-msg">Not available</p>`;
+    } else {
+      card.innerHTML = `
+        <div class="stall-name">${s.name}</div>
+        <div class="stall-count">${count}</div>
+        <div class="stall-unit">people in queue</div>
+        <div class="bar-wrap"><div class="bar-fill" style="width:${pct}%; background:${col.bar};"></div></div>
+        <div class="stall-wait">
+          <span class="status-dot" style="background:${col.dot};"></span>
+          ~${wait} min wait
+        </div>`;
+    }
+    grid.appendChild(card);
+  });
+
+  document.getElementById("total-people").textContent = total;
+  document.getElementById("open-count").textContent = openCount;
+  document.getElementById("best-stall").textContent = bestName;
+  document.getElementById("best-wait").textContent = bestName === "—" ? "" : `~${bestWaitVal} min wait`;
+}
+
+function updateClock() {
+  document.getElementById("clock").textContent = new Date().toLocaleTimeString("en-SG", { hour: "2-digit", minute: "2-digit", second: "2-digit" });
+}
+
+async function fetchCounts() {
+  try {
+    const res = await fetch(COUNTS_FILE + "?t=" + Date.now());
+    if (!res.ok) throw new Error("not found");
+    const data = await res.json();
+    document.getElementById("error-bar").style.display = "none";
+    buildGrid(data);
+  } catch (e) {
+    document.getElementById("error-bar").style.display = "block";
+  }
+}
+
+updateClock();
+fetchCounts();
+setInterval(fetchCounts, 1000);
+setInterval(updateClock, 1000);
+</script>
+</body>
+</html>
